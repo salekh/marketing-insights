@@ -1,0 +1,35 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.ruff_cache/
+
+# Virtual environments
+.venv
+.venv*
+env/
+venv/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Logs
+*.log
+
+# IDE settings
+.vscode/
+.idea/
+.DS_Store
+
+# Agent-specific
+.adk/
+.google-agents-cli/
+.adk-artifacts/
