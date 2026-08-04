@@ -27,7 +27,14 @@ def _get_bq_client() -> bigquery.Client:
 def _get_genai_client() -> genai.Client:
     global _genai_client
     if _genai_client is None:
-        _genai_client = genai.Client(vertexai=False)
+        use_vertexai = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "True").lower() in ("true", "1")
+        if use_vertexai:
+            _genai_client = genai.Client(
+                vertexai=True,
+                location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
+            )
+        else:
+            _genai_client = genai.Client(vertexai=False)
     return _genai_client
 
 
