@@ -202,7 +202,7 @@ from app.app_utils.newsletter_a2ui import _before_model_callback, _after_model_c
 
 REWE_A2UI_INSTRUCTION = REWE_INSTRUCTION.replace(
     "**Step 8 — Generate HTML Newsletter**\nCall `generate_newsletter_html` to create the final newsletter HTML using the official REWE HTML template.",
-    "**Step 8 — Generate A2UI Newsletter**\nCall `generate_newsletter_a2ui` to create the final newsletter in compact A2UI v0.9 format using the official REWE template layout and styling."
+    "**Step 8 — Generate A2UI Newsletter**\nCall `generate_newsletter_a2ui` to create the final newsletter in compact A2UI v0.8 (GE-compatible) format using the official REWE template layout and styling."
 ).replace(
     "Present the returned HTML from `generate_newsletter_html` directly in your final response as the newsletter output.",
     "Present the returned A2UI JSON payload string from `generate_newsletter_a2ui` directly in your final response as the newsletter output."

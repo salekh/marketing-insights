@@ -63,7 +63,7 @@ def test_clean_markdown_in_newsletter() -> None:
 
 
 def test_render_newsletter_a2ui() -> None:
-    """Test that render_newsletter_a2ui produces a valid A2UI v0.9 createSurface payload."""
+    """Test that render_newsletter_a2ui produces a valid A2UI v0.8 GE-compatible payload."""
     from app.app_utils.newsletter_a2ui import render_newsletter_a2ui
 
     a2ui_out = render_newsletter_a2ui(
@@ -71,20 +71,24 @@ def test_render_newsletter_a2ui() -> None:
         headline="**REWE organic summer party snacks**",
         body_text="Enjoy *fresh* food today!",
     )
-    assert len(a2ui_out) == 1
-    envelope = a2ui_out[0]
-    assert envelope["version"] == "v0.9"
-    assert "createSurface" in envelope
-    surface = envelope["createSurface"]
+    assert len(a2ui_out) == 2
+    begin_env = a2ui_out[0]
+    assert begin_env["version"] == "v0.8"
+    assert "beginRendering" in begin_env
+    assert begin_env["beginRendering"]["surfaceId"] == "rewe-newsletter-a2ui"
+
+    update_env = a2ui_out[1]
+    assert update_env["version"] == "v0.8"
+    assert "surfaceUpdate" in update_env
+    surface = update_env["surfaceUpdate"]
     assert surface["surfaceId"] == "rewe-newsletter-a2ui"
     assert "components" in surface
     assert len(surface["components"]) > 10
     # Ensure markdown was cleaned
-    text_values = [
-        comp.get("text", "")
-        for comp in surface["components"]
-        if comp.get("component") == "Text"
-    ]
+    text_values = []
+    for comp in surface["components"]:
+        if "Text" in comp.get("component", {}):
+            text_values.append(comp["component"]["Text"]["text"].get("literalString", ""))
     assert any("REWE organic summer party snacks" in val for val in text_values)
     assert not any("**" in val for val in text_values)
 
@@ -97,7 +101,7 @@ def test_extract_text_and_a2ui() -> None:
         "Here is the personalized blog post and SEO strategy for Sanchit.\n\n"
         "📝 SEO Strategy & Blog Post\nSome great content here.\n\n"
         "📧 Generated A2UI Newsletter Payload\n"
-        '[{"version": "v0.9", "createSurface": {"surfaceId": "rewe-newsletter-a2ui", "catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json", "components": [{"id": "root", "component": "Column", "children": []}]}}]'
+        '[{"version": "v0.8", "beginRendering": {"surfaceId": "rewe-newsletter-a2ui", "root": "root", "catalogId": "https://a2ui.org/specification/v0_8/basic_catalog.json"}}, {"version": "v0.8", "surfaceUpdate": {"surfaceId": "rewe-newsletter-a2ui", "components": []}}]'
     )
     text_part, a2ui_part = extract_text_and_a2ui(sample_output)
     assert "SEO Strategy & Blog Post" in text_part

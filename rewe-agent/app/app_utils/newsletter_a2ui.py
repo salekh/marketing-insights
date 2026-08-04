@@ -24,8 +24,8 @@ from app.app_utils.newsletter_template import (
     _format_price,
 )
 
-A2UI_VERSION = "v0.9"
-A2UI_BASIC_CATALOG_ID = "https://a2ui.org/specification/v0_9/basic_catalog.json"
+A2UI_VERSION = "v0.8"
+A2UI_BASIC_CATALOG_ID = "https://a2ui.org/specification/v0_8/basic_catalog.json"
 _A2UI_BLOB_MARKER = b"<a2a_datapart_json>"
 
 
@@ -234,7 +234,68 @@ def render_newsletter_a2ui(
         else:
             final_products.append(DEFAULT_PRODUCTS[idx % len(DEFAULT_PRODUCTS)])
 
-    # Build A2UI components list
+    # Helper builders for A2UI v0.8 (GE-compatible)
+    def _text(comp_id: str, text: str, usage_hint: str = "body") -> dict[str, Any]:
+        return {
+            "id": comp_id,
+            "component": {
+                "Text": {
+                    "text": {"literalString": str(text)},
+                    "usageHint": usage_hint,
+                }
+            },
+        }
+
+    def _image(comp_id: str, url: str, fit: str = "cover") -> dict[str, Any]:
+        return {
+            "id": comp_id,
+            "component": {
+                "Image": {
+                    "url": {"literalString": str(url)},
+                    "fit": fit,
+                }
+            },
+        }
+
+    def _divider(comp_id: str) -> dict[str, Any]:
+        return {
+            "id": comp_id,
+            "component": {"Divider": {}},
+        }
+
+    def _button(comp_id: str, label_id: str) -> dict[str, Any]:
+        return {
+            "id": comp_id,
+            "component": {
+                "Button": {
+                    "child": label_id,
+                }
+            },
+        }
+
+    def _card(comp_id: str, child_id: str) -> dict[str, Any]:
+        return {
+            "id": comp_id,
+            "component": {
+                "Card": {
+                    "child": child_id,
+                }
+            },
+        }
+
+    def _column(comp_id: str, children_ids: list[str]) -> dict[str, Any]:
+        return {
+            "id": comp_id,
+            "component": {
+                "Column": {
+                    "children": {
+                        "explicitList": children_ids,
+                    }
+                }
+            },
+        }
+
+    # Build A2UI v0.8 components list
     components: list[dict[str, Any]] = []
 
     # Root Column
@@ -254,82 +315,22 @@ def render_newsletter_a2ui(
     for idx in range(6):
         root_children.append(f"prod_card_{idx}")
 
-    components.append({
-        "id": "root",
-        "component": "Column",
-        "children": root_children,
-    })
+    components.append(_column("root", root_children))
 
     # Header components
     components.extend([
-        {
-            "id": "header_title",
-            "component": "Text",
-            "text": "REWE Newsletter • Dein Markt",
-            "variant": "title",
-        },
-        {
-            "id": "header_divider",
-            "component": "Divider",
-        },
-        {
-            "id": "hero_image",
-            "component": "Image",
-            "url": str(hero_image_url),
-            "fit": "cover",
-            "accessibility": {"label": hero_image_alt or "REWE Hero Image"},
-        },
-        {
-            "id": "hero_headline",
-            "component": "Text",
-            "text": headline,
-            "variant": "headline",
-        },
-        {
-            "id": "hero_badge",
-            "component": "Text",
-            "text": badge_text,
-            "variant": "caption",
-        },
-        {
-            "id": "hero_greeting",
-            "component": "Text",
-            "text": f"Hallo {customer_name},",
-            "variant": "title",
-        },
-        {
-            "id": "hero_body",
-            "component": "Text",
-            "text": body_text,
-            "variant": "body",
-        },
-        {
-            "id": "cta_button",
-            "component": "Button",
-            "child": "cta_button_label",
-        },
-        {
-            "id": "cta_button_label",
-            "component": "Text",
-            "text": cta_button_text,
-            "variant": "button",
-        },
-        {
-            "id": "offers_divider",
-            "component": "Divider",
-        },
-        {
-            "id": "offers_heading",
-            "component": "Text",
-            "text": "Unsere aktuellen REWE Angebote",
-            "variant": "headline",
-        },
-        {
-            "id": "offers_subheading",
-            "component": "Text",
-            "text": valid_until_text,
-            "variant": "caption",
-        },
+        _text("header_title", "REWE Newsletter • Dein Markt", "h2"),
+        _divider("header_divider"),
+        _image("hero_image", str(hero_image_url), "cover"),
+        _text("hero_headline", headline, "h1"),
+        _text("hero_badge", badge_text, "caption"),
+        _text("hero_greeting", f"Hallo {customer_name},", "h2"),
+        _text("hero_body", body_text, "body"),
+        _button("cta_button", "cta_button_label"),
+        _text("cta_button_label", cta_button_text, "body"),
+        _divider("offers_divider"),
+        _text("offers_heading", "Unsere aktuellen REWE Angebote", "h1"),
+        _text("offers_subheading", valid_until_text, "caption"),
     ])
 
     # Product cards
@@ -361,52 +362,32 @@ def render_newsletter_a2ui(
         desc_id = f"prod_desc_{idx}"
 
         components.extend([
-            {
-                "id": card_id,
-                "component": "Card",
-                "child": col_id,
-            },
-            {
-                "id": col_id,
-                "component": "Column",
-                "children": [img_id, badge_id, title_id, desc_id],
-            },
-            {
-                "id": img_id,
-                "component": "Image",
-                "url": p_img,
-                "fit": "contain",
-                "accessibility": {"label": p_name},
-            },
-            {
-                "id": badge_id,
-                "component": "Text",
-                "text": badge_price_str,
-                "variant": "caption",
-            },
-            {
-                "id": title_id,
-                "component": "Text",
-                "text": p_name,
-                "variant": "title",
-            },
-            {
-                "id": desc_id,
-                "component": "Text",
-                "text": p_desc,
-                "variant": "body",
-            },
+            _card(card_id, col_id),
+            _column(col_id, [img_id, badge_id, title_id, desc_id]),
+            _image(img_id, p_img, "contain"),
+            _text(badge_id, badge_price_str, "caption"),
+            _text(title_id, p_name, "h2"),
+            _text(desc_id, p_desc, "body"),
         ])
 
-    envelope = {
-        "version": A2UI_VERSION,
-        "createSurface": {
-            "surfaceId": "rewe-newsletter-a2ui",
-            "catalogId": A2UI_BASIC_CATALOG_ID,
-            "components": components,
+    surface_id = "rewe-newsletter-a2ui"
+    return [
+        {
+            "version": A2UI_VERSION,
+            "beginRendering": {
+                "surfaceId": surface_id,
+                "root": "root",
+                "catalogId": A2UI_BASIC_CATALOG_ID,
+            },
         },
-    }
-    return [envelope]
+        {
+            "version": A2UI_VERSION,
+            "surfaceUpdate": {
+                "surfaceId": surface_id,
+                "components": components,
+            },
+        },
+    ]
 
 
 def extract_text_and_a2ui(full_output: str) -> tuple[str, str]:
@@ -416,7 +397,7 @@ def extract_text_and_a2ui(full_output: str) -> tuple[str, str]:
 
     import re
 
-    match = re.search(r"\[\s*\{\s*(?:\"version\"|\"createSurface\")", full_output)
+    match = re.search(r"\[\s*\{\s*(?:\"version\"|\"createSurface\"|\"beginRendering\"|\"surfaceUpdate\")", full_output)
     if not match:
         return ("", "")
 
@@ -428,7 +409,7 @@ def extract_text_and_a2ui(full_output: str) -> tuple[str, str]:
         a2ui_candidate = a2ui_candidate[:r_idx + 1]
         try:
             parsed = json.loads(a2ui_candidate)
-            if isinstance(parsed, list) and len(parsed) > 0 and "createSurface" in parsed[0]:
+            if isinstance(parsed, list) and len(parsed) > 0 and ("createSurface" in parsed[0] or "beginRendering" in parsed[0] or "surfaceUpdate" in parsed[0] or "version" in parsed[0]):
                 lines = text_part.splitlines()
                 while lines and (
                     "Generated A2UI" in lines[-1]
