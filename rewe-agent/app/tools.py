@@ -131,7 +131,7 @@ Return ONLY a valid JSON object with this exact structure:
 {{"keywords": ["keyword1", "keyword2", "keyword3"], "primary_keyword": "keyword1", "search_intent": "mixed"}}"""
 
     response = _get_genai_client().models.generate_content(
-        model="gemini-3-flash-preview",
+        model="gemini-3.6-flash",
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -349,7 +349,7 @@ Return ONLY a valid JSON array with 4-5 objects:
 
     try:
         curation_response = _get_genai_client().models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-3.6-flash",
             contents=curation_prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -417,7 +417,7 @@ async def generate_blog_image(
     )
 
     response = await _get_genai_client().aio.models.generate_content(
-        model="gemini-3.1-flash-image-preview",
+        model="gemini-3.1-flash-image",
         contents=marketing_prompt,
         config=types.GenerateContentConfig(
             response_modalities=["IMAGE", "TEXT"],

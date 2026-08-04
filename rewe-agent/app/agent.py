@@ -85,7 +85,7 @@ Before finalizing, silently verify that NONE of the recommended products violate
 root_agent = Agent(
     name="rewe_marketing_agent",
     model=Gemini(
-        model="gemini-3.1-pro-preview",
+        model="gemini-3.6-flash",
         retry_options=types.HttpRetryOptions(attempts=2),
     ),
     instruction=REWE_INSTRUCTION,
