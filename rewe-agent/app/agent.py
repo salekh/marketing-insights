@@ -189,12 +189,14 @@ Present the returned HTML from `generate_newsletter_html` directly in your final
 - The blog must feel personalized, not generic — reference the persona type explicitly in the tone
 """
 
+from app.app_utils.newsletter_a2ui import _before_model_callback, _after_model_callback
+
 REWE_A2UI_INSTRUCTION = REWE_INSTRUCTION.replace(
     "**Step 8 — Generate HTML Newsletter**\nCall `generate_newsletter_html` to create the final newsletter HTML using the official REWE HTML template.",
     "**Step 8 — Generate A2UI Newsletter**\nCall `generate_newsletter_a2ui` to create the final newsletter in compact A2UI v0.9 format using the official REWE template layout and styling."
 ).replace(
     "Present the returned HTML from `generate_newsletter_html` directly in your final response as the newsletter output.",
-    "Present the returned A2UI JSON payload string from `generate_newsletter_a2ui` directly in your final response as the newsletter output."
+    "After calling `generate_newsletter_a2ui`, present a clean, human-readable summary of the blog post, SEO strategy, and product recommendations in your final text response. Do NOT output raw JSON in your text summary."
 )
 
 html_newsletter_agent = Agent(
@@ -230,7 +232,9 @@ root_agent = Agent(
         generate_newsletter_a2ui,
         PreloadMemoryTool(),
     ],
-    after_agent_callback=a2ui_after_agent_callback,
+    before_model_callback=_before_model_callback,
+    after_model_callback=_after_model_callback,
+    after_agent_callback=memory_callback,
 )
 
 app = App(

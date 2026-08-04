@@ -48,6 +48,72 @@ def _wrap_a2ui_part(a2ui_message: dict[str, Any]) -> Any:
         inline_data=types.Blob(data=blob_data, mime_type="text/plain")
     )
 
+
+_A2UI_PENDING_KEY = "temp:a2ui_pending"
+_latest_a2ui_stash: list[dict[str, Any]] | None = None
+
+
+def _stash_latest_a2ui(envelope_list: list[dict[str, Any]]) -> None:
+    global _latest_a2ui_stash
+    _latest_a2ui_stash = envelope_list
+
+
+def _before_model_callback(callback_context: Any, llm_request: Any) -> None:
+    """Strip echoed A2UI blobs from history so the model doesn't regurgitate."""
+    from google.genai import types
+
+    if not getattr(llm_request, "contents", None):
+        return None
+
+    for content in llm_request.contents:
+        if not getattr(content, "parts", None):
+            continue
+        clean_parts = [
+            types.Part.from_text(text="[A2UI component rendered]")
+            if (
+                getattr(p, "inline_data", None)
+                and p.inline_data.mime_type == "text/plain"
+                and _A2UI_BLOB_MARKER in (p.inline_data.data or b"")
+            )
+            else p
+            for p in content.parts
+        ]
+        content.parts[:] = clean_parts
+
+    return None
+
+
+def _after_model_callback(callback_context: Any, llm_response: Any) -> Any:
+    """Inject pending A2UI inline_data blobs into the model response with a2a metadata."""
+    from google.adk.models.llm_response import LlmResponse
+    from google.genai import types
+
+    global _latest_a2ui_stash
+    pending = None
+    if callback_context and hasattr(callback_context, "state") and _A2UI_PENDING_KEY in callback_context.state:
+        pending = callback_context.state.get(_A2UI_PENDING_KEY)
+        callback_context.state[_A2UI_PENDING_KEY] = None
+
+    if not pending and _latest_a2ui_stash:
+        pending = _latest_a2ui_stash
+        _latest_a2ui_stash = None
+
+    if not pending:
+        return None
+
+    blob_parts = [_wrap_a2ui_part(msg) for msg in pending]
+
+    existing_parts = []
+    if llm_response and getattr(llm_response, "content", None) and getattr(llm_response.content, "parts", None):
+        existing_parts = list(llm_response.content.parts)
+
+    all_parts = existing_parts + blob_parts
+
+    return LlmResponse(
+        content=types.Content(role="model", parts=all_parts),
+        custom_metadata={"a2a:response": True},
+    )
+
 DEFAULT_PRODUCTS = [
     {
         "name": "Neuburger",
