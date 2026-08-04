@@ -115,11 +115,11 @@ def test_wrap_a2ui_part() -> None:
     from app.app_utils.newsletter_a2ui import _wrap_a2ui_part
 
     envelope = {
-        "version": "v0.9",
-        "createSurface": {
+        "version": "v0.8",
+        "beginRendering": {
             "surfaceId": "rewe-newsletter-a2ui",
-            "catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json",
-            "components": [],
+            "root": "root",
+            "catalogId": "https://a2ui.org/specification/v0_8/basic_catalog.json",
         },
     }
     part = _wrap_a2ui_part(envelope)

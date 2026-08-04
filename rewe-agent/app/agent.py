@@ -114,6 +114,9 @@ async def a2ui_after_agent_callback(callback_context: CallbackContext) -> types.
     if not a2ui_part:
         return None
 
+    if callback_context.session.events:
+        callback_context.session.events.pop()
+
     if text_part and text_part.strip():
         from google.adk.events import Event
         text_event = Event(
@@ -127,6 +130,7 @@ async def a2ui_after_agent_callback(callback_context: CallbackContext) -> types.
 
     import json
     from app.app_utils.newsletter_a2ui import _wrap_a2ui_part
+    from google.adk.events import Event
 
     a2ui_parts = []
     try:
@@ -141,11 +145,16 @@ async def a2ui_after_agent_callback(callback_context: CallbackContext) -> types.
     if not a2ui_parts:
         a2ui_parts = [types.Part.from_text(text=a2ui_part.strip())]
 
-    return types.Content(
-        role="model",
-        parts=a2ui_parts,
+    a2ui_event = Event(
+        author="model",
+        content=types.Content(
+            role="model",
+            parts=a2ui_parts,
+        ),
         custom_metadata={"a2a:response": True},
     )
+    callback_context.session.events.append(a2ui_event)
+    return None
 
 
 REWE_INSTRUCTION = """
