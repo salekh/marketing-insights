@@ -420,10 +420,16 @@ async def generate_blog_image(
     )
 
     marketing_prompt = (
-        f"Create a vibrant, high-quality marketing photograph for a REWE grocery retailer "
-        f"blog post: {prompt}. "
-        f"Style: professional food photography, bright natural lighting, appetizing composition, "
-        f"retail-ready aesthetic. No text overlays."
+        f"Professional editorial lifestyle and food photograph tailored for audiences in "
+        f"Germany, Austria, and Switzerland (DACH region), capturing an authentic, natural European setting: "
+        f"{prompt}. "
+        f"Setting & Atmosphere: Set in an authentic German/Austrian home garden terrace, sunny city balcony, "
+        f"or modern European kitchen with natural wood surfaces, ceramic stoneware, and linen textiles. "
+        f"Photography Style: Shot on 35mm full-frame camera with a 50mm f/1.8 prime lens, natural golden hour "
+        f"sunlight filtering through foliage, shallow depth of field with soft bokeh, organic color grading. "
+        f"Food & Prop Styling: Crisp seasonal European produce with glistening water droplets, crusty artisan sourdough, "
+        f"rustic wooden serving boards, candid and lived-in composition that feels inviting and premium. "
+        f"Quality: Photorealistic, natural lighting, zero artificial CGI gloss, zero text overlays or logos."
     )
 
     response = await _get_genai_client().aio.models.generate_content(
