@@ -19,12 +19,15 @@ from .tools import (
 _, project_id = google.auth.default()
 os.environ["GOOGLE_CLOUD_PROJECT"] = project_id
 os.environ["GOOGLE_CLOUD_LOCATION"] = "global"
-os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "True"
+os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "False"
 
 
 async def memory_callback(callback_context: CallbackContext):
     """Saves the conversation to Memory Bank for cross-session learning."""
-    await callback_context.add_session_to_memory()
+    try:
+        await callback_context.add_session_to_memory()
+    except (ValueError, AttributeError) as e:
+        print(f"DEBUG: Skipping memory save: {e}")
     return None
 
 

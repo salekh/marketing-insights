@@ -46,7 +46,10 @@ class AgentEngineApp(AdkApp):
     def register_feedback(self, feedback: dict[str, Any]) -> None:
         """Collect and log feedback."""
         feedback_obj = Feedback.model_validate(feedback)
-        self.logger.log_struct(feedback_obj.model_dump(), severity="INFO")
+        try:
+            self.logger.log_struct(feedback_obj.model_dump(), severity="INFO")
+        except Exception as e:
+            logging.info(f"Feedback logged locally: {feedback_obj.model_dump()} ({e})")
 
     def register_operations(self) -> dict[str, list[str]]:
         """Registers the operations of the Agent."""
