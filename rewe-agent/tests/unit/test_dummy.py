@@ -18,6 +18,34 @@ data processing, and other core components of your application.
 """
 
 
-def test_dummy() -> None:
-    """Placeholder - replace with real tests."""
-    assert 1 == 1
+from app.app_utils.newsletter_template import render_newsletter_html
+
+
+def test_render_newsletter_html_default() -> None:
+    """Test that render_newsletter_html produces valid HTML with default/invented values."""
+    html_out = render_newsletter_html()
+    assert "<!DOCTYPE html>" in html_out
+    assert "Hallo Sanchit," in html_out
+    assert "Goldene Kiwi" in html_out
+    assert "Angebote bis Samstag bei" in html_out
+
+
+def test_render_newsletter_html_custom() -> None:
+    """Test that render_newsletter_html populates custom placeholders correctly."""
+    html_out = render_newsletter_html(
+        customer_name="Anna",
+        headline="Winter Angebote",
+        badge_text="Schöne Feiertage",
+        body_text="Tolles Festtagessen bei REWE!",
+        products=[
+            {"name": "Bio Apfel", "price": "1,99 €", "usage_tip": "Frisch und lecker"},
+            {"name": "REWE Brot", "price": "2,49 €"},
+        ],
+    )
+    assert "Hallo Anna," in html_out
+    assert "Winter Angebote" in html_out
+    assert "Schöne<br>Feiertage" in html_out
+    assert "Tolles Festtagessen bei REWE!" in html_out
+    assert "Bio Apfel" in html_out
+    assert "1,99 €" in html_out
+    assert "REWE Brot" in html_out

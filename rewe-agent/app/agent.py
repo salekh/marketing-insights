@@ -13,6 +13,7 @@ from .tools import (
     get_product_recommendations,
     generate_blog_image,
     generate_seo_keywords,
+    generate_newsletter_html,
 )
 
 # Environment Configuration
@@ -75,6 +76,19 @@ Present the `curated_recommendations` as a markdown table with columns: Product,
 **Step 7 — Dietary Safety Check**
 Before finalizing, silently verify that NONE of the recommended products violate the customer's `dietary_tags`. If a product is unsuitable, note this and ask `get_product_recommendations` again (it will surface the next-best options).
 
+**Step 8 — Generate HTML Newsletter**
+Call `generate_newsletter_html` to create the final newsletter HTML using the official REWE HTML template. Pass:
+- `customer_name`: The customer's first name (or "Sanchit" / "Kunde" if unknown)
+- `headline`: A catchy 3-line hero headline for the newsletter (e.g., "Deine Angebote\nfür festliche\nMomente!")
+- `badge_text`: A short 4-line circular badge message (e.g., "Wir\nwünschen\nschöne\nFesttage")
+- `body_text`: The engaging blog post (~300 words) written in Step 4
+- `hero_image_url`: The image URL from `generate_blog_image` in Step 5 (or leave empty if unavailable)
+- `hero_image_alt`: The alt text / prompt description of the hero image
+- `products`: A list of the 4-6 recommended products from Step 6, each with `name`, `description` (using usage_tip or details), `price` (invent a realistic REWE price in € if missing, e.g., "1,99 €"), `image_url` (optional), and `badge` ("Aktion")
+- `valid_until_text`: Validity period (e.g., "Gültig bis 27.12.2025" or next Saturday)
+
+Present the returned HTML from `generate_newsletter_html` directly in your final response as the newsletter output.
+
 ---
 
 ### Constraints:
@@ -97,6 +111,7 @@ root_agent = Agent(
         generate_seo_keywords,
         generate_blog_image,
         get_product_recommendations,
+        generate_newsletter_html,
         PreloadMemoryTool(),
     ],
     after_agent_callback=memory_callback,
