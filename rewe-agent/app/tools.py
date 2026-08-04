@@ -493,10 +493,9 @@ async def generate_blog_image(
     )
 
     global _latest_generated_image_uri
-    base64_data_uri = f"data:image/png;base64,{base64.b64encode(image_bytes).decode('ascii')}"
-    _latest_generated_image_uri = base64_data_uri
+    _latest_generated_image_uri = "blog_hero_image.png"
     try:
-        tool_context.state["latest_hero_image_uri"] = base64_data_uri
+        tool_context.state["latest_hero_image_uri"] = "blog_hero_image.png"
     except Exception:
         pass
 
@@ -504,8 +503,6 @@ async def generate_blog_image(
         "status": "success",
         "alt_text": alt_text,
         "artifact_filename": artifact_filename,
-        "image_url": base64_data_uri,
-        "image_base64": base64_data_uri,
     }
 
 
