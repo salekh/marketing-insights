@@ -456,9 +456,249 @@ async def _async_extract_text_and_a2ui(full_output: str) -> tuple[str, str]:
         t_res = parsed_res.get("text", "").strip()
         a_res = parsed_res.get("a2ui_json", "").strip()
         parsed_array = json.loads(a_res)
-        if isinstance(parsed_array, list) and len(parsed_array) > 0 and "createSurface" in parsed_array[0]:
+        if isinstance(parsed_array, list) and len(parsed_array) > 0 and ("createSurface" in parsed_array[0] or "beginRendering" in parsed_array[0] or "surfaceUpdate" in parsed_array[0] or "version" in parsed_array[0]):
             return (t_res, json.dumps(parsed_array, indent=2, ensure_ascii=False))
     except Exception as e:
         print(f"DEBUG: gemini-3.5-flash-lite A2UI split fallback failed: {e}")
 
     return ("", "")
+
+
+def _strip_a2a_wrappers(text: str) -> str:
+    import re
+    return re.sub(
+        r"<a2a_datapart_json>.*?</a2a_datapart_json>", "", text, flags=re.DOTALL
+    )
+
+
+def _extract_a2ui_json(text: str) -> str | None:
+    import re
+    tag_match = re.search(r"<a2ui-json>(.*?)</a2ui-json>", text, re.DOTALL)
+    if tag_match:
+        return tag_match.group(1).strip()
+
+    fence_match = re.search(r"```(?:json)?\s*([\[\{].*?)\s*```", text, re.DOTALL)
+    if fence_match:
+        return fence_match.group(1).strip()
+
+    clean_text = _strip_a2a_wrappers(text).strip()
+
+    json_start = -1
+    for i, ch in enumerate(clean_text):
+        if ch in ("[", "{"):
+            json_start = i
+            break
+
+    json_end = -1
+    for i, ch in enumerate(reversed(clean_text)):
+        if ch in ("]", "}"):
+            json_end = len(clean_text) - i
+            break
+
+    if json_start != -1 and json_end != -1 and json_start < json_end:
+        return clean_text[json_start:json_end]
+
+    return None
+
+
+def _sanitize_json(text: str) -> str:
+    text = text.replace("\u201c", '\\"').replace("\u201d", '\\"')
+    text = text.replace("\u2018", "'").replace("\u2019", "'")
+    return text
+
+
+def _parse_json_greedy(text: str) -> list:
+    decoder = json.JSONDecoder()
+    results = []
+    idx = 0
+    text = text.strip()
+    while idx < len(text):
+        while idx < len(text) and text[idx] in " \t\n\r":
+            idx += 1
+        if idx >= len(text):
+            break
+        if text[idx] not in '[{"tfn0123456789-':
+            break
+        try:
+            obj, end = decoder.raw_decode(text, idx)
+        except json.JSONDecodeError:
+            break
+        if isinstance(obj, list):
+            results.extend(obj)
+        else:
+            results.append(obj)
+        idx = end
+    if not results:
+        raise json.JSONDecodeError("No valid JSON found", text, 0)
+    return results
+
+
+def _repair_json(text: str) -> list | None:
+    opens = {"{": "}", "[": "]"}
+    closes = {"}", "]"}
+    stack = []
+    in_string = False
+    escape_next = False
+
+    for ch in text:
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in opens:
+            stack.append(opens[ch])
+        elif ch in closes:
+            if stack and stack[-1] == ch:
+                stack.pop()
+
+    if not stack:
+        try:
+            result = json.loads(text)
+            return result if isinstance(result, list) else [result]
+        except json.JSONDecodeError:
+            return None
+
+    suffix = '"' if in_string else ""
+    repaired = text + suffix + "".join(reversed(stack))
+    try:
+        result = json.loads(repaired)
+        return result if isinstance(result, list) else [result]
+    except json.JSONDecodeError:
+        return None
+
+
+def before_model_callback(callback_context: Any, llm_request: Any) -> None:
+    from google.genai import types
+
+    if not getattr(llm_request, "contents", None):
+        return None
+
+    for content in llm_request.contents:
+        if not getattr(content, "parts", None):
+            continue
+        clean_parts = [
+            types.Part.from_text(text="[A2UI component rendered]")
+            if (
+                getattr(p, "inline_data", None)
+                and p.inline_data.mime_type == "text/plain"
+                and _A2UI_BLOB_MARKER in (p.inline_data.data or b"")
+            )
+            else p
+            for p in content.parts
+        ]
+        content.parts[:] = clean_parts
+
+    return None
+
+
+def a2ui_callback(callback_context: Any, llm_response: Any) -> Any:
+    from google.adk.models.llm_response import LlmResponse
+    from google.genai import types
+
+    if not getattr(llm_response, "content", None) or not getattr(llm_response.content, "parts", None):
+        return None
+
+    a2ui_keys = {
+        "beginRendering", "surfaceUpdate", "dataModelUpdate", "deleteSurface",
+        "surfaceId", "components",
+    }
+
+    new_parts = []
+    found_a2ui = False
+
+    for part_idx, part in enumerate(llm_response.content.parts):
+        if not getattr(part, "text", None):
+            new_parts.append(part)
+            continue
+
+        text = part.text.strip()
+
+        if "<a2a_datapart_json>" in text:
+            stripped = _strip_a2a_wrappers(text).strip()
+            if not stripped:
+                continue
+            text = stripped
+
+        if not any(k in text for k in a2ui_keys):
+            new_parts.append(types.Part.from_text(text=text))
+            continue
+
+        json_text = _extract_a2ui_json(text)
+        if json_text is None:
+            new_parts.append(types.Part.from_text(text=text))
+            continue
+
+        json_text = _sanitize_json(json_text)
+
+        try:
+            parsed = _parse_json_greedy(json_text)
+        except json.JSONDecodeError:
+            parsed = _repair_json(json_text)
+            if parsed is None:
+                new_parts.append(types.Part.from_text(text=text))
+                continue
+
+        if not isinstance(parsed, list):
+            parsed = [parsed]
+
+        wrapped_keys = {"beginRendering", "surfaceUpdate", "dataModelUpdate", "deleteSurface"}
+        normalized: list[dict] = []
+        for m in parsed:
+            if not isinstance(m, dict):
+                continue
+            if any(k in m for k in wrapped_keys):
+                normalized.append(m)
+            elif "surfaceId" in m and "components" in m:
+                surface_id = m["surfaceId"]
+                components = m["components"]
+                if components and isinstance(components, list) and isinstance(components[0], dict):
+                    root_id = components[0].get("id", surface_id)
+                    normalized.append(
+                        {"beginRendering": {"surfaceId": surface_id, "root": root_id}}
+                    )
+                normalized.append(
+                    {"surfaceUpdate": {"surfaceId": surface_id, "components": components}}
+                )
+            elif "surfaceId" in m:
+                normalized.append(m)
+
+        msgs = normalized
+        if not msgs:
+            new_parts.append(types.Part.from_text(text=text))
+            continue
+
+        has_begin = any("beginRendering" in m for m in msgs)
+        if not has_begin:
+            for m in msgs:
+                if "surfaceUpdate" in m:
+                    surface_id = m["surfaceUpdate"].get("surfaceId")
+                    components = m["surfaceUpdate"].get("components", [])
+                    if surface_id and components:
+                        msgs.insert(
+                            0,
+                            {
+                                "beginRendering": {
+                                    "surfaceId": surface_id,
+                                    "root": components[0]["id"],
+                                }
+                            },
+                        )
+                    break
+
+        new_parts.extend([_wrap_a2ui_part(m) for m in msgs])
+        found_a2ui = True
+
+    if not found_a2ui:
+        return None
+
+    return LlmResponse(
+        content=types.Content(role="model", parts=new_parts),
+        custom_metadata={"a2a:response": "true"},
+    )

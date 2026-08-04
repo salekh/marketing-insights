@@ -89,71 +89,12 @@ async def newsletter_after_agent_callback(callback_context: CallbackContext) -> 
     return types.Content(role="model", parts=[types.Part.from_text(text=pure_html)])
 
 
-async def a2ui_after_agent_callback(callback_context: CallbackContext) -> types.Content | None:
-    """Saves session to memory and splits response into two distinct parts: readable text and pure A2UI JSON."""
+async def memory_after_agent_callback(callback_context: CallbackContext) -> None:
+    """Saves session to memory cleanly after turn completion."""
     try:
         await callback_context.add_session_to_memory()
     except (ValueError, AttributeError) as e:
         print(f"DEBUG: Skipping memory save: {e}")
-
-    last_text: str | None = None
-    for event in reversed(callback_context.session.events):
-        if event.content and event.content.parts:
-            for part in event.content.parts:
-                if part.text and ("createsurface" in part.text.lower() or "rewe-newsletter-a2ui" in part.text.lower() or "v0.9" in part.text.lower()):
-                    last_text = part.text
-                    break
-        if last_text:
-            break
-
-    if not last_text:
-        return None
-
-    from app.app_utils.newsletter_a2ui import _async_extract_text_and_a2ui
-    text_part, a2ui_part = await _async_extract_text_and_a2ui(last_text)
-    if not a2ui_part:
-        return None
-
-    if callback_context.session.events:
-        callback_context.session.events.pop()
-
-    if text_part and text_part.strip():
-        from google.adk.events import Event
-        text_event = Event(
-            author="model",
-            content=types.Content(
-                role="model",
-                parts=[types.Part.from_text(text=text_part.strip())],
-            ),
-        )
-        callback_context.session.events.append(text_event)
-
-    import json
-    from app.app_utils.newsletter_a2ui import _wrap_a2ui_part
-    from google.adk.events import Event
-
-    a2ui_parts = []
-    try:
-        parsed_msgs = json.loads(a2ui_part.strip())
-        if isinstance(parsed_msgs, list):
-            a2ui_parts = [_wrap_a2ui_part(m) for m in parsed_msgs]
-        elif isinstance(parsed_msgs, dict):
-            a2ui_parts = [_wrap_a2ui_part(parsed_msgs)]
-    except Exception:
-        a2ui_parts = [types.Part.from_text(text=a2ui_part.strip())]
-
-    if not a2ui_parts:
-        a2ui_parts = [types.Part.from_text(text=a2ui_part.strip())]
-
-    a2ui_event = Event(
-        author="model",
-        content=types.Content(
-            role="model",
-            parts=a2ui_parts,
-        ),
-        custom_metadata={"a2a:response": True},
-    )
-    callback_context.session.events.append(a2ui_event)
     return None
 
 
@@ -252,6 +193,8 @@ html_newsletter_agent = Agent(
     after_agent_callback=newsletter_after_agent_callback,
 )
 
+from app.app_utils.newsletter_a2ui import before_model_callback, a2ui_callback
+
 root_agent = Agent(
     name="rewe_marketing_agent",
     model=Gemini(
@@ -267,7 +210,9 @@ root_agent = Agent(
         generate_newsletter_a2ui,
         PreloadMemoryTool(),
     ],
-    after_agent_callback=a2ui_after_agent_callback,
+    before_model_callback=before_model_callback,
+    after_model_callback=a2ui_callback,
+    after_agent_callback=memory_after_agent_callback,
 )
 
 app = App(
