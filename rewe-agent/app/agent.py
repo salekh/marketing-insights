@@ -114,12 +114,21 @@ async def a2ui_after_agent_callback(callback_context: CallbackContext) -> types.
     if not a2ui_part:
         return None
 
-    parts = []
     if text_part and text_part.strip():
-        parts.append(types.Part.from_text(text=text_part.strip()))
-    parts.append(types.Part.from_text(text=a2ui_part.strip()))
+        from google.adk.events import Event
+        text_event = Event(
+            author="model",
+            content=types.Content(
+                role="model",
+                parts=[types.Part.from_text(text=text_part.strip())],
+            ),
+        )
+        callback_context.session.events.append(text_event)
 
-    return types.Content(role="model", parts=parts)
+    return types.Content(
+        role="model",
+        parts=[types.Part.from_text(text=a2ui_part.strip())],
+    )
 
 
 REWE_INSTRUCTION = """
@@ -196,7 +205,7 @@ REWE_A2UI_INSTRUCTION = REWE_INSTRUCTION.replace(
     "**Step 8 — Generate A2UI Newsletter**\nCall `generate_newsletter_a2ui` to create the final newsletter in compact A2UI v0.9 format using the official REWE template layout and styling."
 ).replace(
     "Present the returned HTML from `generate_newsletter_html` directly in your final response as the newsletter output.",
-    "After calling `generate_newsletter_a2ui`, present a clean, human-readable summary of the blog post, SEO strategy, and product recommendations in your final text response. Do NOT output raw JSON in your text summary."
+    "Present the returned A2UI JSON payload string from `generate_newsletter_a2ui` directly in your final response as the newsletter output."
 )
 
 html_newsletter_agent = Agent(
@@ -232,9 +241,7 @@ root_agent = Agent(
         generate_newsletter_a2ui,
         PreloadMemoryTool(),
     ],
-    before_model_callback=_before_model_callback,
-    after_model_callback=_after_model_callback,
-    after_agent_callback=memory_callback,
+    after_agent_callback=a2ui_after_agent_callback,
 )
 
 app = App(

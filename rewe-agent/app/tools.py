@@ -615,34 +615,5 @@ def generate_newsletter_a2ui(
         valid_until_text=valid_until_text,
         products=products,
     )
-
-    # Stash in tool_context state for after_model_callback injection
-    try:
-        from google.adk.tools import ToolContext
-
-        # Extract tool_context if passed via kwargs or frame inspection
-        import inspect
-
-        frame = inspect.currentframe()
-        tool_ctx = None
-        while frame:
-            if "tool_context" in frame.f_locals and frame.f_locals["tool_context"]:
-                tool_ctx = frame.f_locals["tool_context"]
-                break
-            frame = frame.f_back
-
-        if tool_ctx and hasattr(tool_ctx, "state"):
-            tool_ctx.state["temp:a2ui_pending"] = envelope_list
-    except Exception as e:
-        print(f"DEBUG: Could not stash in tool_context state: {e}")
-
-    # Also stash globally as fallback for after_model_callback
-    from app.app_utils.newsletter_a2ui import _stash_latest_a2ui
-    _stash_latest_a2ui(envelope_list)
-
-    return {
-        "status": "success",
-        "result": "A2UI newsletter components generated and stashed for rendering.",
-        "payload_size": len(json.dumps(envelope_list, ensure_ascii=False)),
-    }
+    return json.dumps(envelope_list, ensure_ascii=False)
 
