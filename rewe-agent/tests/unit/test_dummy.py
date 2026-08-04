@@ -87,3 +87,20 @@ def test_render_newsletter_a2ui() -> None:
     ]
     assert any("REWE organic summer party snacks" in val for val in text_values)
     assert not any("**" in val for val in text_values)
+
+
+def test_extract_text_and_a2ui() -> None:
+    """Test that extract_text_and_a2ui separates human readable summary text and pure A2UI JSON array."""
+    from app.app_utils.newsletter_a2ui import extract_text_and_a2ui
+
+    sample_output = (
+        "Here is the personalized blog post and SEO strategy for Sanchit.\n\n"
+        "📝 SEO Strategy & Blog Post\nSome great content here.\n\n"
+        "📧 Generated A2UI Newsletter Payload\n"
+        '[{"version": "v0.9", "createSurface": {"surfaceId": "rewe-newsletter-a2ui", "catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json", "components": [{"id": "root", "component": "Column", "children": []}]}}]'
+    )
+    text_part, a2ui_part = extract_text_and_a2ui(sample_output)
+    assert "SEO Strategy & Blog Post" in text_part
+    assert "Generated A2UI Newsletter Payload" not in text_part
+    assert a2ui_part.startswith("[") and a2ui_part.endswith("]")
+    assert "rewe-newsletter-a2ui" in a2ui_part

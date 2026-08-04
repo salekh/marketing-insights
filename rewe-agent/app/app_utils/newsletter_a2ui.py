@@ -320,3 +320,77 @@ def render_newsletter_a2ui(
         },
     }
     return [envelope]
+
+
+def extract_text_and_a2ui(full_output: str) -> tuple[str, str]:
+    """Extracts (readable_text, pure_a2ui_json) from a combined model response string."""
+    if not full_output:
+        return ("", "")
+
+    idx = full_output.find('[{"version": "v0.')
+    if idx == -1:
+        idx = full_output.find('[{\n  "version": "v0.')
+    if idx == -1:
+        idx = full_output.find('[{"version":"v0.')
+
+    if idx != -1:
+        text_part = full_output[:idx].strip()
+        a2ui_candidate = full_output[idx:].strip()
+        r_idx = a2ui_candidate.rfind("]")
+        if r_idx != -1:
+            a2ui_candidate = a2ui_candidate[:r_idx + 1]
+            try:
+                parsed = json.loads(a2ui_candidate)
+                if isinstance(parsed, list) and len(parsed) > 0 and "createSurface" in parsed[0]:
+                    lines = text_part.splitlines()
+                    while lines and (
+                        "Generated A2UI" in lines[-1]
+                        or "```" in lines[-1]
+                        or not lines[-1].strip()
+                    ):
+                        lines.pop()
+                    clean_text = "\n".join(lines).strip()
+                    clean_a2ui = json.dumps(parsed, indent=2, ensure_ascii=False)
+                    return (clean_text, clean_a2ui)
+            except Exception:
+                pass
+
+    return ("", "")
+
+
+async def _async_extract_text_and_a2ui(full_output: str) -> tuple[str, str]:
+    """Extracts (readable_text, pure_a2ui_json) with fallback to gemini-3.5-flash-lite (global)."""
+    text_part, a2ui_part = extract_text_and_a2ui(full_output)
+    if a2ui_part:
+        return (text_part, a2ui_part)
+
+    try:
+        from app.tools import _get_genai_client
+        client = _get_genai_client()
+        prompt = (
+            "You are an expert parser. Separate the following content into two clean parts:\n"
+            "1) 'text': The human-readable text (blog post, SEO strategy, product recommendations) WITHOUT any A2UI JSON array or code block.\n"
+            "2) 'a2ui_json': The exact, pure JSON array string starting with [ and ending with ] that contains the A2UI createSurface envelope.\n"
+            "Return ONLY a valid JSON object with keys 'text' and 'a2ui_json':\n\n" + str(full_output)
+        )
+        response = await client.aio.models.generate_content(
+            model="gemini-3.5-flash-lite",
+            contents=prompt,
+        )
+        raw_res = response.text.strip()
+        if raw_res.startswith("```json"):
+            raw_res = raw_res[7:]
+        if raw_res.startswith("```"):
+            raw_res = raw_res[3:]
+        if raw_res.endswith("```"):
+            raw_res = raw_res[:-3]
+        parsed_res = json.loads(raw_res.strip())
+        t_res = parsed_res.get("text", "").strip()
+        a_res = parsed_res.get("a2ui_json", "").strip()
+        parsed_array = json.loads(a_res)
+        if isinstance(parsed_array, list) and len(parsed_array) > 0 and "createSurface" in parsed_array[0]:
+            return (t_res, json.dumps(parsed_array, indent=2, ensure_ascii=False))
+    except Exception as e:
+        print(f"DEBUG: gemini-3.5-flash-lite A2UI split fallback failed: {e}")
+
+    return ("", "")

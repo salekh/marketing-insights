@@ -89,6 +89,38 @@ async def newsletter_after_agent_callback(callback_context: CallbackContext) -> 
     return types.Content(role="model", parts=[types.Part.from_text(text=pure_html)])
 
 
+async def a2ui_after_agent_callback(callback_context: CallbackContext) -> types.Content | None:
+    """Saves session to memory and splits response into two distinct parts: readable text and pure A2UI JSON."""
+    try:
+        await callback_context.add_session_to_memory()
+    except (ValueError, AttributeError) as e:
+        print(f"DEBUG: Skipping memory save: {e}")
+
+    last_text: str | None = None
+    for event in reversed(callback_context.session.events):
+        if event.content and event.content.parts:
+            for part in event.content.parts:
+                if part.text and ("createsurface" in part.text.lower() or "rewe-newsletter-a2ui" in part.text.lower() or "v0.9" in part.text.lower()):
+                    last_text = part.text
+                    break
+        if last_text:
+            break
+
+    if not last_text:
+        return None
+
+    from app.app_utils.newsletter_a2ui import _async_extract_text_and_a2ui
+    text_part, a2ui_part = await _async_extract_text_and_a2ui(last_text)
+    if not a2ui_part:
+        return None
+
+    parts = []
+    if text_part and text_part.strip():
+        parts.append(types.Part.from_text(text=text_part.strip()))
+    parts.append(types.Part.from_text(text=a2ui_part.strip()))
+    return types.Content(role="model", parts=parts)
+
+
 REWE_INSTRUCTION = """
 You are the **REWE Marketing Expert Agent**. Your mission is to generate personalized, SEO-optimized blog posts that drive product sales while maintaining the REWE brand voice.
 
@@ -197,7 +229,7 @@ root_agent = Agent(
         generate_newsletter_a2ui,
         PreloadMemoryTool(),
     ],
-    after_agent_callback=memory_callback,
+    after_agent_callback=a2ui_after_agent_callback,
 )
 
 app = App(
