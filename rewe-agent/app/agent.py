@@ -125,9 +125,26 @@ async def a2ui_after_agent_callback(callback_context: CallbackContext) -> types.
         )
         callback_context.session.events.append(text_event)
 
+    import json
+    from app.app_utils.newsletter_a2ui import _wrap_a2ui_part
+
+    a2ui_parts = []
+    try:
+        parsed_msgs = json.loads(a2ui_part.strip())
+        if isinstance(parsed_msgs, list):
+            a2ui_parts = [_wrap_a2ui_part(m) for m in parsed_msgs]
+        elif isinstance(parsed_msgs, dict):
+            a2ui_parts = [_wrap_a2ui_part(parsed_msgs)]
+    except Exception:
+        a2ui_parts = [types.Part.from_text(text=a2ui_part.strip())]
+
+    if not a2ui_parts:
+        a2ui_parts = [types.Part.from_text(text=a2ui_part.strip())]
+
     return types.Content(
         role="model",
-        parts=[types.Part.from_text(text=a2ui_part.strip())],
+        parts=a2ui_parts,
+        custom_metadata={"a2a:response": True},
     )
 
 
