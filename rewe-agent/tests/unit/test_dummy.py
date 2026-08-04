@@ -60,3 +60,30 @@ def test_clean_markdown_in_newsletter() -> None:
     assert "<strong>REWE organic summer party snacks</strong>" in html_out
     assert "<em>fresh</em>" in html_out
     assert "**" not in html_out
+
+
+def test_render_newsletter_a2ui() -> None:
+    """Test that render_newsletter_a2ui produces a valid A2UI v0.9 createSurface payload."""
+    from app.app_utils.newsletter_a2ui import render_newsletter_a2ui
+
+    a2ui_out = render_newsletter_a2ui(
+        customer_name="Sanchit",
+        headline="**REWE organic summer party snacks**",
+        body_text="Enjoy *fresh* food today!",
+    )
+    assert len(a2ui_out) == 1
+    envelope = a2ui_out[0]
+    assert envelope["version"] == "v0.9"
+    assert "createSurface" in envelope
+    surface = envelope["createSurface"]
+    assert surface["surfaceId"] == "rewe-newsletter-a2ui"
+    assert "components" in surface
+    assert len(surface["components"]) > 10
+    # Ensure markdown was cleaned
+    text_values = [
+        comp.get("text", "")
+        for comp in surface["components"]
+        if comp.get("component") == "Text"
+    ]
+    assert any("REWE organic summer party snacks" in val for val in text_values)
+    assert not any("**" in val for val in text_values)

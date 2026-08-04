@@ -14,6 +14,7 @@ from .tools import (
     generate_blog_image,
     generate_seo_keywords,
     generate_newsletter_html,
+    generate_newsletter_a2ui,
 )
 from app.app_utils.newsletter_template import DEFAULT_HERO_IMAGE_URL, extract_pure_html
 
@@ -155,8 +156,16 @@ Present the returned HTML from `generate_newsletter_html` directly in your final
 - The blog must feel personalized, not generic — reference the persona type explicitly in the tone
 """
 
-root_agent = Agent(
-    name="rewe_marketing_agent",
+REWE_A2UI_INSTRUCTION = REWE_INSTRUCTION.replace(
+    "**Step 8 — Generate HTML Newsletter**\nCall `generate_newsletter_html` to create the final newsletter HTML using the official REWE HTML template.",
+    "**Step 8 — Generate A2UI Newsletter**\nCall `generate_newsletter_a2ui` to create the final newsletter in compact A2UI v0.9 format using the official REWE template layout and styling."
+).replace(
+    "Present the returned HTML from `generate_newsletter_html` directly in your final response as the newsletter output.",
+    "Present the returned A2UI JSON payload string from `generate_newsletter_a2ui` directly in your final response as the newsletter output."
+)
+
+html_newsletter_agent = Agent(
+    name="html_newsletter_agent",
     model=Gemini(
         model="gemini-3.6-flash",
         retry_options=types.HttpRetryOptions(attempts=2),
@@ -171,6 +180,24 @@ root_agent = Agent(
         PreloadMemoryTool(),
     ],
     after_agent_callback=newsletter_after_agent_callback,
+)
+
+root_agent = Agent(
+    name="rewe_marketing_agent",
+    model=Gemini(
+        model="gemini-3.6-flash",
+        retry_options=types.HttpRetryOptions(attempts=2),
+    ),
+    instruction=REWE_A2UI_INSTRUCTION,
+    tools=[
+        get_customer_context,
+        generate_seo_keywords,
+        generate_blog_image,
+        get_product_recommendations,
+        generate_newsletter_a2ui,
+        PreloadMemoryTool(),
+    ],
+    after_agent_callback=memory_callback,
 )
 
 app = App(
