@@ -15,6 +15,7 @@ from .tools import (
     generate_seo_keywords,
     generate_newsletter_html,
 )
+from app.app_utils.newsletter_template import DEFAULT_HERO_IMAGE_URL, extract_pure_html
 
 # Environment Configuration
 _, project_id = google.auth.default()
@@ -30,6 +31,61 @@ async def memory_callback(callback_context: CallbackContext):
     except (ValueError, AttributeError) as e:
         print(f"DEBUG: Skipping memory save: {e}")
     return None
+
+
+async def newsletter_after_agent_callback(callback_context: CallbackContext) -> types.Content | None:
+    """Saves session to memory and enforces pure HTML newsletter output with embedded images."""
+    try:
+        await callback_context.add_session_to_memory()
+    except (ValueError, AttributeError) as e:
+        print(f"DEBUG: Skipping memory save: {e}")
+
+    # Search for HTML in session events from latest to earliest
+    last_html_candidate: str | None = None
+    for event in reversed(callback_context.session.events):
+        if event.content and event.content.parts:
+            for part in event.content.parts:
+                if part.text and ("<!doctype html>" in part.text.lower() or "<html" in part.text.lower()):
+                    last_html_candidate = part.text
+                    break
+        if last_html_candidate:
+            break
+
+    if not last_html_candidate:
+        return None
+
+    pure_html = extract_pure_html(last_html_candidate)
+
+    # Optional fallback: use gemini-3.5-flash-lite (global) if extraction needs LLM assistance
+    if not pure_html:
+        try:
+            from app.tools import _get_genai_client
+            client = _get_genai_client()
+            prompt = (
+                "Extract and return ONLY the pure valid HTML document (starting with <!DOCTYPE html> "
+                "and ending with </html>) from the following text. Convert any markdown bold **text** "
+                "inside tags into <strong>text</strong> HTML tags. Do NOT wrap in markdown code blocks "
+                "or add any commentary:\n\n" + str(last_html_candidate)
+            )
+            response = await client.aio.models.generate_content(
+                model="gemini-3.5-flash-lite",
+                contents=prompt,
+            )
+            pure_html = extract_pure_html(response.text)
+        except Exception as e:
+            print(f"DEBUG: gemini-3.5-flash-lite fallback extraction failed: {e}")
+
+    if not pure_html:
+        return None
+
+    # Embed generated hero image if available and needed
+    from app.tools import _latest_generated_image_uri
+    if _latest_generated_image_uri:
+        pure_html = pure_html.replace("blog_hero_image.png", _latest_generated_image_uri)
+        if "data:image/" not in pure_html and DEFAULT_HERO_IMAGE_URL in pure_html:
+            pure_html = pure_html.replace(DEFAULT_HERO_IMAGE_URL, _latest_generated_image_uri)
+
+    return types.Content(role="model", parts=[types.Part.from_text(text=pure_html)])
 
 
 REWE_INSTRUCTION = """
@@ -114,7 +170,7 @@ root_agent = Agent(
         generate_newsletter_html,
         PreloadMemoryTool(),
     ],
-    after_agent_callback=memory_callback,
+    after_agent_callback=newsletter_after_agent_callback,
 )
 
 app = App(

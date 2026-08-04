@@ -17,6 +17,7 @@ DATASET_ID = "rewe_marketing"
 # when running on Agent Runtime (avoids credential errors at import time).
 _bq_client: bigquery.Client | None = None
 _genai_client: genai.Client | None = None
+_latest_generated_image_uri: str | None = None
 
 
 def _get_bq_client() -> bigquery.Client:
@@ -491,10 +492,20 @@ async def generate_blog_image(
         f"({len(image_bytes)} bytes)"
     )
 
+    global _latest_generated_image_uri
+    base64_data_uri = f"data:image/png;base64,{base64.b64encode(image_bytes).decode('ascii')}"
+    _latest_generated_image_uri = base64_data_uri
+    try:
+        tool_context.state["latest_hero_image_uri"] = base64_data_uri
+    except Exception:
+        pass
+
     return {
         "status": "success",
         "alt_text": alt_text,
         "artifact_filename": artifact_filename,
+        "image_url": base64_data_uri,
+        "image_base64": base64_data_uri,
     }
 
 
@@ -529,6 +540,14 @@ def generate_newsletter_html(
         The complete, rendered HTML string of the newsletter.
     """
     from app.app_utils.newsletter_template import render_newsletter_html
+
+    global _latest_generated_image_uri
+    if not hero_image_url or (
+        not str(hero_image_url).startswith("http")
+        and not str(hero_image_url).startswith("data:image/")
+    ):
+        if _latest_generated_image_uri:
+            hero_image_url = _latest_generated_image_uri
 
     return render_newsletter_html(
         customer_name=customer_name,

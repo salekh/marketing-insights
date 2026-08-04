@@ -49,3 +49,14 @@ def test_render_newsletter_html_custom() -> None:
     assert "Bio Apfel" in html_out
     assert "1,99 €" in html_out
     assert "REWE Brot" in html_out
+
+
+def test_clean_markdown_in_newsletter() -> None:
+    """Test that markdown formatting (bold, italic) is cleaned into HTML tags."""
+    html_out = render_newsletter_html(
+        headline="**REWE organic summer party snacks**",
+        body_text="Enjoy *fresh* food today!",
+    )
+    assert "<strong>REWE organic summer party snacks</strong>" in html_out
+    assert "<em>fresh</em>" in html_out
+    assert "**" not in html_out

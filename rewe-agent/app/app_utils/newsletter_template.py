@@ -15,7 +15,38 @@
 
 import html
 import json
+import re
 from typing import Any
+
+
+def _clean_markdown_to_html(text: str) -> str:
+    """Converts basic markdown formatting (bold, italic, linebreaks) to HTML tags."""
+    if not text:
+        return ""
+    text = re.sub(r"^```[a-zA-Z]*\n?", "", text.strip())
+    text = re.sub(r"\n?```$", "", text.strip())
+    text = re.sub(r"\*\*(.*?)\*\*", r"<strong>\1</strong>", text)
+    text = re.sub(r"(?<!\w)\*([^\*\n]+?)\*(?!\w)", r"<em>\1</em>", text)
+    return text
+
+
+def extract_pure_html(text: str) -> str | None:
+    """Extracts pure <!DOCTYPE html>...</html> without any leading/trailing markdown or text."""
+    if not text:
+        return None
+    lower_text = text.lower()
+    start_idx = lower_text.find("<!doctype html>")
+    if start_idx == -1:
+        start_idx = lower_text.find("<html")
+    if start_idx == -1:
+        return None
+    end_idx = lower_text.rfind("</html>")
+    if end_idx == -1:
+        return None
+    end_idx += len("</html>")
+    pure_html = text[start_idx:end_idx].strip()
+    return _clean_markdown_to_html(pure_html)
+
 
 DEFAULT_HERO_IMAGE_URL = (
     "https://lh3.googleusercontent.com/aida-public/"
@@ -114,14 +145,14 @@ def _format_price(price_val: Any, default_val: str = "1,99 €") -> str:
 
 def _render_product_card(idx: int, p: dict[str, Any], default_p: dict[str, Any]) -> str:
     """Renders a single product card HTML snippet."""
-    p_name = html.escape(str(p.get("name") or default_p["name"]))
+    p_name = _clean_markdown_to_html(html.escape(str(p.get("name") or default_p["name"])))
     p_desc_val = (
         p.get("usage_tip")
         or p.get("description")
         or p.get("marketing_copy")
         or default_p["description"]
     )
-    p_desc = html.escape(str(p_desc_val))
+    p_desc = _clean_markdown_to_html(html.escape(str(p_desc_val)))
     p_price = html.escape(_format_price(p.get("price") or p.get("price_current"), default_p["price"]))
     p_badge = html.escape(str(p.get("badge") or default_p.get("badge") or "Aktion"))
     p_img = html.escape(str(p.get("image_url") or default_p["image_url"]))
@@ -206,13 +237,20 @@ def render_newsletter_html(
         else:
             badge_html = "<br>".join(badge_text.split()[:4])
 
+    headline_html = _clean_markdown_to_html(headline_html)
+    badge_html = _clean_markdown_to_html(badge_html)
+
     if not body_text:
         body_text = (
             "Feste feiern & genießen! Ob Weihnachtsdinner oder Silvesterabend – "
             "entdecke unsere Top-Angebote für genussvolle Momente mit Familie und Freunden."
         )
+    body_text = _clean_markdown_to_html(body_text)
 
-    if not hero_image_url or not str(hero_image_url).startswith("http"):
+    if not hero_image_url or (
+        not str(hero_image_url).startswith("http")
+        and not str(hero_image_url).startswith("data:image/")
+    ):
         hero_image_url = DEFAULT_HERO_IMAGE_URL
 
     if not hero_image_alt:
@@ -280,7 +318,7 @@ def render_newsletter_html(
 <div class="bg-[#47667c] p-stack-lg text-on-primary">
 <h2 class="font-headline-lg font-bold mb-stack-md">Hallo {html.escape(customer_name)},</h2>
 <p class="font-body-lg mb-stack-lg leading-relaxed">
-          {html.escape(body_text)}
+          {body_text}
         </p>
 <div class="font-body-md mb-stack-lg">
 <p class="">Herzliche Grüße</p>
