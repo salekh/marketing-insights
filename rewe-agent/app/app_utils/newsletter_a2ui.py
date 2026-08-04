@@ -26,6 +26,27 @@ from app.app_utils.newsletter_template import (
 
 A2UI_VERSION = "v0.9"
 A2UI_BASIC_CATALOG_ID = "https://a2ui.org/specification/v0_9/basic_catalog.json"
+_A2UI_BLOB_MARKER = b"<a2a_datapart_json>"
+
+
+def _wrap_a2ui_part(a2ui_message: dict[str, Any]) -> Any:
+    """Wrap an A2UI message dict as an inline-data blob for ADK Dev-UI / A2UI client rendering."""
+    import json as _json
+    from google.genai import types
+
+    datapart_json = _json.dumps({
+        "kind": "data",
+        "metadata": {"mimeType": "application/json+a2ui"},
+        "data": a2ui_message,
+    })
+    blob_data = (
+        _A2UI_BLOB_MARKER
+        + datapart_json.encode("utf-8")
+        + b"</a2a_datapart_json>"
+    )
+    return types.Part(
+        inline_data=types.Blob(data=blob_data, mime_type="text/plain")
+    )
 
 DEFAULT_PRODUCTS = [
     {

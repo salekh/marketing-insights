@@ -114,10 +114,24 @@ async def a2ui_after_agent_callback(callback_context: CallbackContext) -> types.
     if not a2ui_part:
         return None
 
+    from app.app_utils.newsletter_a2ui import _wrap_a2ui_part
+    import json as _json
+
     parts = []
     if text_part and text_part.strip():
         parts.append(types.Part.from_text(text=text_part.strip()))
-    parts.append(types.Part.from_text(text=a2ui_part.strip()))
+
+    try:
+        a2ui_list = _json.loads(a2ui_part)
+        if isinstance(a2ui_list, dict):
+            a2ui_list = [a2ui_list]
+        for item in a2ui_list:
+            if isinstance(item, dict):
+                parts.append(_wrap_a2ui_part(item))
+    except Exception as e:
+        print(f"DEBUG: Failed to wrap A2UI inline_data part: {e}")
+        parts.append(types.Part.from_text(text=a2ui_part.strip()))
+
     return types.Content(role="model", parts=parts)
 
 

@@ -104,3 +104,22 @@ def test_extract_text_and_a2ui() -> None:
     assert "Generated A2UI Newsletter Payload" not in text_part
     assert a2ui_part.startswith("[") and a2ui_part.endswith("]")
     assert "rewe-newsletter-a2ui" in a2ui_part
+
+
+def test_wrap_a2ui_part() -> None:
+    """Test that _wrap_a2ui_part formats an A2UI message as an inline_data blob for ADK Dev-UI rendering."""
+    from app.app_utils.newsletter_a2ui import _wrap_a2ui_part
+
+    envelope = {
+        "version": "v0.9",
+        "createSurface": {
+            "surfaceId": "rewe-newsletter-a2ui",
+            "catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json",
+            "components": [],
+        },
+    }
+    part = _wrap_a2ui_part(envelope)
+    assert part.inline_data is not None
+    assert part.inline_data.mime_type == "text/plain"
+    assert b"<a2a_datapart_json>" in part.inline_data.data
+    assert b"rewe-newsletter-a2ui" in part.inline_data.data
