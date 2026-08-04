@@ -28,7 +28,19 @@ import json
 from fastapi import FastAPI, HTTPException, Request, encoders, responses
 from vertexai.agent_engines.templates.adk import AdkApp
 
+from typing import Any
 from app.app_utils import services
+
+
+def _default_json_serializer(obj: Any) -> Any:
+    """Fallback JSON serializer for Pydantic models, SDK types, and non-serializable objects."""
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump(mode="json")
+    if hasattr(obj, "to_dict"):
+        return obj.to_dict()
+    if hasattr(obj, "__dict__"):
+        return obj.__dict__
+    return str(obj)
 
 
 def _no_op_instrumentor_builder(project_id: str) -> None:
@@ -82,7 +94,8 @@ def attach_reasoning_engine_routes(app: FastAPI) -> None:
 
         async def generator():
             async for event in method(**(body.get("input") or {})):
-                yield json.dumps(event) + "\n"
+                encoded_event = encoders.jsonable_encoder(event)
+                yield json.dumps(encoded_event, default=_default_json_serializer) + "\n"
 
         return responses.StreamingResponse(
             content=generator(), media_type="application/json"
