@@ -348,33 +348,33 @@ def extract_text_and_a2ui(full_output: str) -> tuple[str, str]:
     if not full_output:
         return ("", "")
 
-    idx = full_output.find('[{"version": "v0.')
-    if idx == -1:
-        idx = full_output.find('[{\n  "version": "v0.')
-    if idx == -1:
-        idx = full_output.find('[{"version":"v0.')
+    import re
 
-    if idx != -1:
-        text_part = full_output[:idx].strip()
-        a2ui_candidate = full_output[idx:].strip()
-        r_idx = a2ui_candidate.rfind("]")
-        if r_idx != -1:
-            a2ui_candidate = a2ui_candidate[:r_idx + 1]
-            try:
-                parsed = json.loads(a2ui_candidate)
-                if isinstance(parsed, list) and len(parsed) > 0 and "createSurface" in parsed[0]:
-                    lines = text_part.splitlines()
-                    while lines and (
-                        "Generated A2UI" in lines[-1]
-                        or "```" in lines[-1]
-                        or not lines[-1].strip()
-                    ):
-                        lines.pop()
-                    clean_text = "\n".join(lines).strip()
-                    clean_a2ui = json.dumps(parsed, indent=2, ensure_ascii=False)
-                    return (clean_text, clean_a2ui)
-            except Exception:
-                pass
+    match = re.search(r"\[\s*\{\s*(?:\"version\"|\"createSurface\")", full_output)
+    if not match:
+        return ("", "")
+
+    idx = match.start()
+    text_part = full_output[:idx].strip()
+    a2ui_candidate = full_output[idx:].strip()
+    r_idx = a2ui_candidate.rfind("]")
+    if r_idx != -1:
+        a2ui_candidate = a2ui_candidate[:r_idx + 1]
+        try:
+            parsed = json.loads(a2ui_candidate)
+            if isinstance(parsed, list) and len(parsed) > 0 and "createSurface" in parsed[0]:
+                lines = text_part.splitlines()
+                while lines and (
+                    "Generated A2UI" in lines[-1]
+                    or "```" in lines[-1]
+                    or not lines[-1].strip()
+                ):
+                    lines.pop()
+                clean_text = "\n".join(lines).strip()
+                clean_a2ui = json.dumps(parsed, indent=2, ensure_ascii=False)
+                return (clean_text, clean_a2ui)
+        except Exception:
+            pass
 
     return ("", "")
 
