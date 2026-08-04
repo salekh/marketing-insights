@@ -695,10 +695,24 @@ def a2ui_callback(callback_context: Any, llm_response: Any) -> Any:
         new_parts.extend([_wrap_a2ui_part(m) for m in msgs])
         found_a2ui = True
 
+    global _latest_a2ui_stash
+    pending = None
+    if callback_context and hasattr(callback_context, "state") and _A2UI_PENDING_KEY in callback_context.state:
+        pending = callback_context.state.get(_A2UI_PENDING_KEY)
+        callback_context.state[_A2UI_PENDING_KEY] = None
+
+    if not pending and _latest_a2ui_stash:
+        pending = _latest_a2ui_stash
+        _latest_a2ui_stash = None
+
+    if pending:
+        new_parts.extend([_wrap_a2ui_part(msg) for msg in pending])
+        found_a2ui = True
+
     if not found_a2ui:
         return None
 
     return LlmResponse(
         content=types.Content(role="model", parts=new_parts),
-        custom_metadata={"a2a:response": "true"},
+        custom_metadata={"a2a:response": True},
     )

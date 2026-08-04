@@ -13,6 +13,7 @@ dependencies = [
     "protobuf>=6.31.1,<7.0.0",
     "litellm>=1.83.7",
     "a2a-sdk[http-server]~=0.3.22",
+    "a2ui-agent-sdk>=0.2.4",
     "aiohttp>=3.13.4",
     "opentelemetry-resourcedetector-gcp<=1.12.0a0",
 ]
