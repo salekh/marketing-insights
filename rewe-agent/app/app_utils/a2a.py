@@ -50,13 +50,31 @@ _ADK_AGENT_EXECUTOR_EXTENSION_URI = (
 
 
 def _default_capabilities() -> AgentCapabilities:
-    """Returns the default A2A capabilities used by scaffolded projects."""
+    """A2A capabilities: streaming, ADK executor and the A2UI v0.9/v0.8 extensions.
+
+    Advertising the A2UI extensions lets Gemini Enterprise negotiate A2UI
+    (``X-A2A-Extensions``) when this agent is registered as an A2A agent; the
+    newsletter widget is emitted as ``application/json+a2ui`` DataParts.
+    """
+    from a2ui.a2a.extension import get_a2ui_agent_extension
+
+    from app.app_utils.newsletter_a2ui import (
+        V08_STANDARD_CATALOG_ID,
+        V09_BASIC_CATALOG_ID,
+    )
+
     return AgentCapabilities(
         streaming=True,
         extensions=[
             AgentExtension(
                 uri=_ADK_AGENT_EXECUTOR_EXTENSION_URI,
                 description=("Ability to use the new agent executor implementation"),
+            ),
+            get_a2ui_agent_extension(
+                "0.9", supported_catalog_ids=[V09_BASIC_CATALOG_ID]
+            ),
+            get_a2ui_agent_extension(
+                "0.8", supported_catalog_ids=[V08_STANDARD_CATALOG_ID]
             ),
         ],
     )
@@ -122,7 +140,9 @@ async def attach_a2a_routes(
     ).build()
 
     request_handler = DefaultRequestHandler(
-        agent_executor=A2aAgentExecutor(runner=runner),
+        # use_legacy=True: GE's A2A requests must go through _prepare_session,
+        # otherwise A2UI silently falls back to plain text (go/ge-a2ui).
+        agent_executor=A2aAgentExecutor(runner=runner, use_legacy=True),
         task_store=task_store,
     )
 

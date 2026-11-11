@@ -131,7 +131,12 @@ rewe-agent/
 │   ├── agent.py                 # Agent definition, instruction prompt, tool bindings
 │   ├── tools.py                 # 4 tools: customer context, SEO, products, image gen
 │   ├── agent_runtime_app.py     # AgentEngineApp (AdkApp subclass) for deployment
+│   ├── assets/                  # REWE wordmark (public domain) + Barlow fonts (OFL)
 │   └── app_utils/
+│       ├── newsletter_a2ui.py   # A2UI v0.9/v0.8 serializer + GE envelope + ADK callbacks
+│       ├── newsletter_builder.py# Packshots → brand artwork → GCS → A2UI pipeline
+│       ├── rewe_brand.py        # Pillow compositor: masthead, hero, price tags, footer
+│       ├── image_host.py        # GCS upload + V4 signed URLs (data: URI fallback)
 │       ├── telemetry.py         # OpenTelemetry → Cloud Trace + BigQuery
 │       └── typing.py            # Feedback schema (Pydantic)
 ├── tests/                       # Unit, integration, and load tests
@@ -172,9 +177,34 @@ agents-cli playground
 ### Deploy to Agent Engine
 
 ```bash
-gcloud config set project sa-learning-1
-agents-cli deploy
+gcloud config configurations activate argolis-project   # sa-learning-1
+gcloud auth login && gcloud auth application-default login
+deployment/deploy_ge_a2ui.sh   # bucket + signer SA + tests + agents-cli deploy
 ```
+
+## Gemini Enterprise A2UI Newsletter
+
+The final answer is a REWE-branded newsletter widget rendered natively by
+Gemini Enterprise (GE) via [A2UI](https://a2ui.org/).
+
+**Spec support in GE (2026-11):** A2UI **v0.9** (Angular renderer; Basic,
+Material and GE Custom catalogs; `theme.primaryColor` honoured) and **v0.8**
+(Lit renderer, Standard catalog, maintenance mode). The agent emits **v0.9 +
+Basic catalog** by default; set `A2UI_VERSION=v0.8` to switch.
+
+**Wire format (ADK agent on Agent Runtime, `adkAgentDefinition`):** every A2UI
+message is its own `inline_data` part, `mime_type="text/plain"`, bytes exactly
+`<a2a_datapart_json>{"data":{…one message…},"metadata":{"mimeType":"application/json+a2ui"}}</a2a_datapart_json>`
+(no whitespace, ≤ 1 MiB). GE's planner turns these into UI events. The same
+parts become `application/json+a2ui` DataParts on the A2A route
+(`/a2a/app`), whose agent card advertises the A2UI v0.9/v0.8 extensions.
+
+**Visual fidelity:** GE draws native components with its own fonts, so the
+brand-critical parts (logo masthead, red hero panel + yellow sticker, product
+tiles with REWE price tags, legal footer) are composited server-side with the
+real REWE wordmark and Barlow fonts, uploaded to a private GCS bucket and served
+via 7-day V4 signed URLs. Copy, product names and CTAs stay native A2UI text and
+buttons. Product packshots are generated with Gemini image and cached in GCS.
 
 ### Test the Deployed Agent
 
@@ -198,6 +228,10 @@ Open `create_genai_agent_evaluation.ipynb` and run all cells. The notebook uses 
 | `GOOGLE_CLOUD_LOCATION` | Agent Engine region | `global` |
 | `GOOGLE_GENAI_USE_VERTEXAI` | Use Vertex AI backend | `True` |
 | `LOGS_BUCKET_NAME` | GCS bucket for image artifacts | (in-memory if unset) |
+| `A2UI_VERSION` | A2UI spec emitted for the newsletter (`v0.9` or `v0.8`) | `v0.9` |
+| `NEWSLETTER_ASSETS_BUCKET` | Private bucket for rendered newsletter images | `LOGS_BUCKET_NAME` |
+| `NEWSLETTER_SIGNER_SA` | SA used to sign image URLs (runtime needs Token Creator on it) | runtime SA |
+| `PACKSHOT_MODEL` | Image model for product packshots | `gemini-3.1-flash-image` |
 
 ## Known Issues
 
